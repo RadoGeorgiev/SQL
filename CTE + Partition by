@@ -1,0 +1,10 @@
+with t1 as(
+select 
+    length(CITY) len,
+    CITY,
+    RANK() OVER ( partition by length(CITY) 
+                 order by CITY asc) CITY_ROW
+                 from station )
+select City, len  from t1
+where CITY_ROW=1
+and (len=(select min(len) from t1) or len=(select max(len) from t1));
