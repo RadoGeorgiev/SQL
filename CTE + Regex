@@ -1,0 +1,44 @@
+with ipf as
+(
+       select f.region_nr || '.' || f.etentity_nr || '/' || f.building_nr as ipf_key,
+                     REGEXP_REPLACE(f.ETENTITY_NAME_EN  , 'Ã¼|Ã¤|ÃŸ|Ã–|Ãœ|Ï', 'ü|ä|ß|Ö|Ü|ü') ETENTITY_NAME_EN,
+                     REGEXP_REPLACE(f.CITY              , 'Ã¼|Ã¤|ÃŸ|Ã–|Ãœ|Ï', 'ü|ä|ß|Ö|Ü|ü') CITY,
+                     REGEXP_REPLACE(f.COUNTRY           , 'Ã¼|Ã¤|ÃŸ|Ã–|Ãœ|Ï', 'ü|ä|ß|Ö|Ü|ü') COUNTRY
+       from   t_co_ipf_ipfv_sst_wsrp f 
+       where f.extraction_date = 
+                     ( 
+                           select max(extraction_date) 
+                   from     t_co_ipf_ipfv_sst_wsrp l
+                   where    f.REGION_NR = l.REGION_NR
+                           and f.ETENTITY_NR = l.ETENTITY_NR
+                           and f.BUILDING_NR = l.BUILDING_NR
+                     )
+)
+select                 ad.cn as ID,
+              ad.os as osname,
+              case when lower(ad.os_type) like '%windows%' then 'Windows' else 'no category' end as ostype,
+              regexp_substr(pa_dm_util.f_get_ou_from_dn(ad.dn, 'full_ou'), '[^/]+', 1, 1) as val1,
+              pa_dm_util.f_get_ou_from_dn(ad.dn, 'main_ou') as val3,
+              REGEXP_SUBSTR(pa_dm_util.f_get_ou_from_dn(ad.dn, 'sub_ou'), '[^- ]+', 1, 1) as val4,
+              regexp_substr(pa_dm_util.f_get_ou_from_dn(ad.dn, 'sub_ou'), '[^- ]+', 1, 2) as val5,
+              g.nsi,
+              g.nsi_location,
+              g."FUNCTION",
+              ipf.ETENTITY_NAME_EN,
+              ipf.CITY,
+              ipf.COUNTRY,
+              g.mietende,
+              g.inv_nr,
+              g.typ as "TYPE",
+              g.bezeichnung as BESCHREIBUNG,
+              g.rv_name_vorname,
+              g.rv_abt,
+              g.rv_kost,
+              g.rv_mail,
+              g.b_name_vorname,
+              g.b_abt,
+              g.b_mail
+from  mv_ad_dc_overall_unique ad
+              left join prima.geraete@pr2 g on g.rechnername = ad.cn and g.aktuell = 1
+              left join ipf on ipf.ipf_key = (g.nsi_werk || '/' || g.nsi_gebaeude)
+where pa_dm_util.f_get_ou_from_dn(ad.dn, 'main_ou') like '%_SP'
