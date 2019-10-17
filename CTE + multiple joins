@@ -1,0 +1,125 @@
+WITH REG AS (
+              select DISTINCT a.KZZ,
+                                         b.loccode,
+                                         b.region
+              from   bmw_v_deptgrp_loc@inin a
+              LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA b ON a.ST5L = b.loccode 
+)
+SELECT  INCIDENT_NUMBER,
+              CUSTOMER_DEPTGRP, reg.loccode AS cust_loc, reg.region AS cust_reg,
+              CONTACT_DEPTGRP, reg1.loccode AS con_loc, reg1.region AS con_reg,
+              SUBMITTER_DEPTGRP, reg2.loccode AS sub_loc, reg2.region AS sub_reg,
+              SERVICE_DEPTGRP, reg3.loccode AS serv_loc, reg3.region AS ser_reg
+from   t_co_itsm_inc_all_data inc
+---------------------------------------------------------------------------------------------------
+       LEFT JOIN reg ON upper(inc.CUSTOMER_DEPTGRP) = upper(reg.KZZ)
+       ----------------------------------------------------------------------------------------------
+       LEFT JOIN reg reg1 ON upper(inc.CONTACT_DEPTGRP) = upper(reg1.KZZ)
+       ----------------------------------------------------------------------------------------------
+       LEFT JOIN reg reg2 ON upper(inc.SUBMITTER_DEPTGRP) = upper(reg2.KZZ)
+       ----------------------------------------------------------------------------------------------
+       LEFT JOIN reg reg3 ON upper(inc.SERVICE_DEPTGRP) = upper(reg3.KZZ)
+       --where  INCIDENT_NUMBER IN ('INC000023568709', 'INC000023493474')
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------
+
+WITH t0 AS (
+       SELECT  loccode,
+                     max(region) AS region
+       FROM BMW_EUC_LOC@TEST_EUC_DATA
+       GROUP
+       BY
+       loccode
+),t1 AS 
+(
+       select       INCIDENT_NUMBER,
+                           CUSTOMER_DEPTGRP,
+                           b.ST5L AS ST5L1,
+                           c.LOCCODE AS LOCCODE1,
+                           c.REGION AS REGION1,
+                           CONTACT_DEPTGRP,
+                           SUBMITTER_DEPTGRP,
+                           SERVICE_DEPTGRP
+       from   t_co_itsm_inc_all_data a
+              LEFT JOIN bmw_v_deptgrp_loc@inin b ON upper(a.CUSTOMER_DEPTGRP) = upper(b.KZZ)
+              LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA c ON b.ST5L = c.LOCCODE
+       where submit_date > '01-OCT-2019'
+                     and status = 'Closed'
+                     AND INCIDENT_NUMBER='INC000023568709' or INCIDENT_NUMBER='INC000023493474'
+),
+t2 AS 
+(
+       SELECT  t1.*,
+                     b.KZZ AS KZZ2,
+                     b.ST5L AS ST5L2,
+                     c.LOCCODE AS LOCCODE2,
+                     c.REGION AS REGION2
+       FROM t1
+              LEFT JOIN bmw_v_deptgrp_loc@inin b ON upper(t1.CONTACT_DEPTGRP) = upper(b.KZZ)
+           LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA c ON b.ST5L = c.LOCCODE       
+),
+t3 AS (
+       SELECT  t2.*,
+                     b.KZZ AS KZZ3,
+                     b.ST5L AS ST5L3,
+                     c.LOCCODE AS LOCCODE3,
+                     c.REGION AS REGION3
+       FROM t2
+              LEFT JOIN bmw_v_deptgrp_loc@inin b ON upper(t2.SUBMITTER_DEPTGRP) = upper(b.KZZ)
+           LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA c ON b.ST5L = c.LOCCODE  
+)
+SELECT  t3.*,
+              b.KZZ AS KZZ4,
+                     b.ST5L AS ST5L4,
+                     c.LOCCODE AS LOCCODE4,
+                     c.REGION AS REGION4
+FROM t3
+              LEFT JOIN bmw_v_deptgrp_loc@inin b ON upper(CASE WHEN t3.SERVICE_DEPTGRP LIKE '%-fg%' THEN 'FG' ELSE t3.SERVICE_DEPTGRP END) = upper(b.KZZ) ---- to do + coalesce + check joins
+           LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA c ON b.ST5L = c.LOCCODE 
+
+-------------------------------------------------------------------------------------
+              
+SELECT *
+from   bmw_v_deptgrp_loc@inin a
+       --LEFT JOIN BMW_EUC_LOC@TEST_EUC_DATA b ON a.ST5L = b.loccode 
+--WHERE KZZ='fg-913'
+
+
+SELECT *
+from   t_co_itsm_inc_all_data
+       where submit_date > '01-OCT-2019'
+                     and status = 'Closed'
+                     AND INCIDENT_NUMBER='INC000023568709' or INCIDENT_NUMBER='INC000023493474'
+
+select      *
+from   BMW_EUC_LOC@TEST_EUC_DATA
+
+
+
+-------------------------------------------------------------------------------------------
+
+
+
+with base as 
+(
+       select mir_id, related_tickets
+       from   dxc_prod_v_mir
+       --where       mir_id in (5176, 5053, 5215)
+), tikets as
+(
+       select        mir_id, related_tickets,
+                     trim(regexp_substr(base.related_tickets, '[^,]+', 1, lines.column_value)) tnum
+       from   base,
+                     table(cast(multiset(select level from dual connect by regexp_substr(base.related_tickets, '[^,]+', 1, level) is not null) as sys.odciNumberList)) lines
+)
+select tikets.*, 
+              coalesce(inc.service, chg.service, prb.service) as service
+from   tikets
+              left join dxc_prod_v_inc_base_v2 inc on inc.incident_number = tikets.tnum
+              left join dxc_prod_v_chg_base chg on chg.change_id = tikets.tnum
+              left join dxc_prod_v_prb_base_v2 prb on prb.problem_investigation_id = tikets.tnum
+
