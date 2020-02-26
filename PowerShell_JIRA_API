@@ -1,0 +1,169 @@
+#========================Setup========================
+
+Import-Module jiraps
+Set-JiraConfigServer -Server "https://Jira.net  # --- enter API endpoint
+
+#=======================GLOBAL VARS===================
+
+$Parent_Path = (Get-Location).Path
+
+#
+$IDs = "Text"
+$APIitemKey = "Text"
+$CaseID = "Text"
+$CreatedSNOW = Get-Date
+$ReqID = "Text"
+$Created = Get-Date
+$ReqItem  = "Text"
+$Service  = "Text"
+$ErrorItem = "Text"
+$ReqBy = "Text"
+$ReqFor = "Text"
+$Status = "Text"
+$Labels = "Text"
+$LCheck = 0
+#
+
+#========================ORACLE DLL===================
+
+Add-Type -Path "$Parent_Path\dll\Oracle.ManagedDataAccess.dll" ### must be installed first !!!!
+
+#=================ORACLE FUNC - Write WSRP============
+#==== NEED INSTALLED DLL, google  Oracle.managedDataAccess.Client.OracleConnection =====
+function Input-WSRP($IDs, $APIitemKey, $CaseID, $ReqID, $ReqItem, $Service, $CreatedSNOW, $ErrorItem, $ReqBy, $ReqFor, $Status, $Created, $Labels, $LCheck) {
+    $conn = new-object Oracle.managedDataAccess.Client.OracleConnection("Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=tldb0156vm.bmwgroup.net)(PORT=1769)) (CONNECT_DATA=(SID=wsrpt)));User Id=" + $obj.UserName + ";Password=" + $obj.Password + ";")
+    try
+    {
+        $cmd = $conn.CreateCommand()
+        #<>#
+        $cmd.CommandText="insert into QQRWSRP.DEV_TMP_API_TEST(      
+                    ID,
+                       API_ITEM_KEY,
+                       CASE_ID,
+                       REQ_ID ,
+                       REQ_ITEM,
+                       SERVICE ,
+                       CREATED_SNOW,
+                       ERROR ,
+                       REQ_BY ,
+                       REQ_FOR ,
+                       STATUS,
+                       CREATED ,
+                       LABELS ,
+                       LABEL_CHECK
+       ) values(
+                    :pIDs, 
+                    :pAPIitemKey, 
+                    :pCaseID, 
+                    :pReqID,  
+                    :pReqItem, 
+                    :pService, 
+                    :pCreatedSNOW, 
+                    :pErrorItem, 
+                    :pReqBy, 
+                    :pReqFor, 
+                    :pStatus,
+                    :pCreated, 
+                    :pLabels, 
+                    :pLCheck)"
+        #<>#
+        $cmd.Parameters.Add($pIDs, $IDs)
+        $cmd.Parameters.Add($pAPIitemKey, $APIitemKey)
+        $cmd.Parameters.Add($pCaseID, $CaseID)
+        $cmd.Parameters.Add($pReqID, $ReqID)
+        $cmd.Parameters.Add($pReqItem, $ReqItem)
+        $cmd.Parameters.Add($pService, $Service)
+        $cmd.Parameters.Add($pCreatedSNOW, $CreatedSNOW)
+        $cmd.Parameters.Add($pErrorItem, $ErrorItem)
+        $cmd.Parameters.Add($pReqBy, $ReqBy)
+        $cmd.Parameters.Add($pReqFor, $ReqFor)
+        $cmd.Parameters.Add($pStatus, $Status)
+        $cmd.Parameters.Add($pCreated, $Created)
+        $cmd.Parameters.Add($pLabels, $Labels)
+        $cmd.Parameters.Add($pLCheck, $LCheck)       
+        #<>#
+        $conn.open()
+        $cmd.ExecuteNonQuery()
+    }
+    catch
+    {
+        $error_msg = "{0}. {1}" -f (Get-Date).ToString(),$_
+        Write-Output $error_msg
+    }
+    finally
+    {
+        if($conn.state -eq 'Open') {$conn.close()}
+    }
+}
+
+#========================USES WINDOWS STORED CREDENTIAL===================
+
+$obj = Get-StoredCredential -Target 'WSRP-TEST' -AsCredentialObject
+$obj_API = Get-StoredCredential -Target 'API' -AsCredentialObject
+$user = $obj_API.UserName
+$pass = $obj_API.Password
+
+$passENC = ConvertTo-SecureString -String $pass -AsPlainText -Force
+$cred = New-Object pscredential $user, $passENC
+
+#=========================API Vars=====================
+
+$jql = "project=ITSRP and labels=WFX_Monitoring AND created>=startOfMonth(-3) and created<=endOfMonth(-3)"
+$fields = "Key", "status", "created", "description", "labels"
+$pagesize = 1000
+$i=0
+
+#========================MAIN SCRIPT=====================
+
+while ($true) {
+    write-host "Running iteration # $($i+1)"
+    $issues= Get-JiraIssue -Query $jql -Fields $fields -Credential $cred -Skip ($i*$pagesize) -First 1 #$pagesize 
+    if($issues -eq $null) {break}
+    
+    foreach ($issue in $issues)
+    {
+
+    $issue_split = $issue.Description.Split(';') #### Description split
+#
+    $IDs = $issue.ID
+    $APIitemKey = $issue.Key
+    $CaseID = ($issue_split  | Select-String -Pattern 'Case ID: (.*)').Matches.Groups[1].Value
+    $CreatedSNOW = [datetime]::ParseExact(($issue_split  | Select-String -Pattern 'Created: (.*)').Matches.Groups[1].Value,"dd.MM.yyyy HH:mm:ss",$null)
+    $ReqID = ($issue_split | Select-String -Pattern 'Request ID: (.*)').Matches.Groups[1].Value
+    $Created = $issue.Created
+    $ReqItem  = ($issue_split | Select-String -Pattern 'Request item: (.*)').Matches.Groups[1].Value
+    $Service  = ($issue_split | Select-String -Pattern 'Service: (.*)').Matches.Groups[1].Value
+    $ErrorItem = ($issue_split | Select-String -Pattern 'Request status: (.*)').Matches.Groups[1].Value
+    $ReqBy = ($issue_split | Select-String -Pattern 'Requested by: (.*)').Matches.Groups[1].Value
+    $ReqFor = ($issue_split | Select-String -Pattern 'Requested for: (.*)').Matches.Groups[1].Value
+    $Status = $issue.Status
+    $Labels = [string]$issue.labels
+    $LCheck =  if($issue.labels -contains 'KPI_exclude'){1}{0}
+
+
+    <##### DATA CHECK #####
+
+    write-host $IDs
+    Write-Host $APIitemKey
+    Write-Host $CaseID
+    Write-Host $CreatedSNOW
+    Write-Host $ReqID
+    Write-Host $ErrorItem
+    write-host $Created
+    Write-Host $ReqItem
+    Write-Host $Service
+    Write-Host $ReqBy
+    Write-Host $ReqFor
+    Write-Host $Status
+    Write-Host $Labels
+    Write-Host $Lcheck
+
+    #####>
+
+    Input-WSRP $IDs $APIitemKey $CaseID $ReqID $ReqItem $Service $CreatedSNOW $ErrorItem $ReqBy $ReqFor $Status $Created $Labels $Lcheck
+    }
+
+    $i+= 1
+}
+write-host "All Done! `$i=$i" 
+
