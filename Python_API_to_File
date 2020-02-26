@@ -1,0 +1,101 @@
+from jira import JIRA
+import pandas as pd
+import re
+import time
+
+#------------------------------------------------------------\=======>
+
+def labelCheck(list_of_values):
+    if 'KPI_exclude' in list_of_values:
+        return 1
+    else:
+        return 0
+    
+def write_excel(df, filename, sheetname):
+    with pd.ExcelWriter(filename, options={'strings_to_urls':False}) as writer:
+        df.to_excel(writer, index=False, sheet_name=sheetname, freeze_panes=(1,0), engine='xlsxwriter')
+   
+start = 0
+    
+def log(message):
+    global start
+    if start!=0:
+        end=time.time()-start
+        print(f'({end:.2f} sec.)')
+    start=time.time()
+    print(message, end='', flush=True)
+        
+#------------------------------------------------------------\=======>
+
+log('Creating items...')
+
+options={"server":"https://example.net/jira"}             #live data API
+#options = {"server":"https://example.net/jira"}        #testing API
+auth=('user', 'password')
+
+block_size = 1000
+block_num = 0
+
+df = pd.DataFrame()
+
+log('Connecting to API...')
+
+jira=JIRA(options, auth=auth)
+
+while True:
+    start_idx = block_num*block_size
+    
+    issues=jira.search_issues('project=ITSRP and labels=WFX_Monitoring AND created >= startOfMonth(-1) AND created <= endOfMonth(-1)', start_idx, block_size)
+    
+    if len(issues) == 0:
+        log('Done!')
+        break
+    
+    block_num += 1
+    
+    log(f'Receiving data block: {block_num}...')
+    
+    for issue in issues:
+        #extract description fields
+        desc=issue.fields.description
+
+        caseID=re.search(r'^Case ID: (.*);', desc, re.M).group(1)
+        requestID=re.search(r'^Request ID: (.*);', desc, re.M).group(1)
+        requestItem=re.search(r'^Request item: (.*);', desc, re.M).group(1)
+        service=re.search(r'^Service: (.*);', desc, re.M).group(1)
+        createdSNOW=pd.to_datetime(re.search(r'^Created: (.*);', desc, re.M).group(1))
+        error=re.search(r'^Request status: (.*);', desc, re.M).group(1)
+        reqby = re.search(r'^Requested by: (.*);', desc, re.M).group(1)
+        reqfor = re.search(r'^Requested for: (.*);', desc, re.M).group(1)
+        status = issue.fields.status
+
+        #Created
+        created = pd.to_datetime(issue.fields.created)
+        
+        #apply checkflag for labels column
+        label = labelCheck(issue.fields.labels)
+
+        #Create row for the dataframe   
+        d = {
+            'Key': issue.key,
+            'Created': created.tz_localize(None),  ## removes the time zoneformat of the Timestamp data type
+            'CaseID': caseID,
+            'RQS': requestID,
+            'RQI': requestItem,
+            'Service': service,
+            'CreatedSNOW': createdSNOW,
+            'Error': error,  
+            'LabelCheck': label
+            #'NEXT TAB ITEMS'
+            #'CreatedNT' : createdSNOW,
+            #'Opened by' : reqby,
+            #'Requested for' : reqfor,
+            #'State' : status,
+            #'Number' : requestID
+        }
+
+        df = df.append(d, ignore_index=True)        
+    
+
+if __name__ == "__main__":
+    write_excel(df, 'JiraTestJan.xlsx', 'Sheet2')
