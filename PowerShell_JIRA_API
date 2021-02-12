@@ -31,7 +31,7 @@ Add-Type -Path "$Parent_Path\dll\Oracle.ManagedDataAccess.dll" ### must be insta
 #=================ORACLE FUNC - Write WSRP============
 #==== NEED INSTALLED DLL, google  Oracle.managedDataAccess.Client.OracleConnection =====
 function Input-WSRP($IDs, $APIitemKey, $CaseID, $ReqID, $ReqItem, $Service, $CreatedSNOW, $ErrorItem, $ReqBy, $ReqFor, $Status, $Created, $Labels, $LCheck) {
-    $conn = new-object Oracle.managedDataAccess.Client.OracleConnection("Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=tldb0156vm.bmwgroup.net)(PORT=1769)) (CONNECT_DATA=(SID=wsrpt)));User Id=" + $obj.UserName + ";Password=" + $obj.Password + ";")
+    $conn = new-object Oracle.managedDataAccess.Client.OracleConnection("Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=something.net)(PORT=1111)) (CONNECT_DATA=(SID=wsrpt)));User Id=" + $obj.UserName + ";Password=" + $obj.Password + ";")
     try
     {
         $cmd = $conn.CreateCommand()
