@@ -39,6 +39,6 @@ select                 ad.cn as ID,
               g.b_abt,
               g.b_mail
 from  mv_ad_dc_overall_unique ad
-              left join prima.geraete@pr2 g on g.rechnername = ad.cn and g.aktuell = 1
+              left join prima g on g.rechnername = ad.cn and g.aktuell = 1
               left join ipf on ipf.ipf_key = (g.nsi_werk || '/' || g.nsi_gebaeude)
 where pa_dm_util.f_get_ou_from_dn(ad.dn, 'main_ou') like '%_SP'
