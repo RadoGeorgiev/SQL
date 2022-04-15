@@ -122,4 +122,16 @@ from   tikets
               left join dxc_prod_v_inc_base_v2 inc on inc.incident_number = tikets.tnum
               left join dxc_prod_v_chg_base chg on chg.change_id = tikets.tnum
               left join dxc_prod_v_prb_base_v2 prb on prb.problem_investigation_id = tikets.tnum
+              
+-------------------------------------------------------------------------------------------
+-----CHECK BIT FLAGS -> equal + OR example
+SELECT *
+FROM tablename t
+WHERE
+  t.flag & 512 = 512
+
+SELECT *
+FROM tablename t
+WHERE
+  t.flag | 256
 
